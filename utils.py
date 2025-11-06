@@ -3,7 +3,7 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-from config import TRAINING_INTERVAL
+from config import TRAINING_INTERVAL  # [修改] 确认导入 config.py
 
 
 def plot_objective_history(objective_his: list, rolling_window: int = 100):
