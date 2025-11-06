@@ -5,9 +5,9 @@ import numpy as np
 from tqdm import tqdm
 
 # Import our custom modules
-from config_test import *
+from config import * # [修改] 导入 config.py
 from environment import SystemEnvironment
-from resource_allocator_fixed_fi import ResourceAllocator
+from resource_allocator import ResourceAllocator  # [修改] 导入新的凸求解器
 from agent import DRLAgent
 import utils
 
@@ -28,7 +28,6 @@ def create_dnn_state(channel_flat: np.ndarray, task_sizes: np.ndarray) -> np.nda
     normalized_tasks = task_sizes / TASK_SIZE_MAX
 
     # Scale channel gains to a more suitable range for the DNN
-    # (e.g., multiply by 1e7 or 1e8 to avoid very small numbers)
     scaled_channels = channel_flat * 1e5
 
     return np.concatenate([scaled_channels, normalized_tasks])
@@ -36,12 +35,12 @@ def create_dnn_state(channel_flat: np.ndarray, task_sizes: np.ndarray) -> np.nda
 
 if __name__ == "__main__":
     # --- 1. Initialization ---
-    print("--- Starting D2D Partial Offloading Simulation ---")
+    print("--- Starting D2D Partial Offloading Simulation (with Convex Solver) ---")
     start_time = time.time()
 
     # Initialize the main components
     env = SystemEnvironment()
-    allocator = ResourceAllocator()
+    allocator = ResourceAllocator() # [修改] 实例化新的求解器
     agent = DRLAgent()
 
     # Initialize lists to store simulation results
@@ -56,19 +55,17 @@ if __name__ == "__main__":
         # b. Create the normalized state for the DNN
         dnn_state = create_dnn_state(channel_flat, task_sizes)
 
-        # c. The DRL agent chooses an offloading action
-        # This action is a "soft" decision, representing probabilities or ratios
-        # b. [修改] Agent 生成 K 个候选动作
+        # c. Agent 生成 K 个候选动作
         candidate_actions = agent.generate_candidate_actions(dnn_state)
-        # d. The resource allocator (critic) evaluates this action
-        # It solves the sub-problem to find the best resources and the resulting cost
-        # c. [修改] Critic (Allocator) 评估所有 K 个动作
+
+        # d. Critic (Allocator) 评估所有 K 个动作
         results_list = []
         for action_k in candidate_actions:
+            # 使用新的求解器
             eval_k = allocator.solve(action_k, channel_matrix, task_sizes)
             results_list.append((eval_k, action_k))
 
-        # d. [修改] 找出最好的动作
+        # e. 找出最好的动作
         best_objective = np.inf
         best_action = None
         for eval_results, action_k in results_list:
@@ -76,24 +73,19 @@ if __name__ == "__main__":
                 best_objective = eval_results['objective']
                 best_action = action_k
 
-        # e. The agent stores the experience (state, action) in its memory
-        # The agent learns from the best actions found. In this simple case,
-        # we store the action it took. In a more complex setup (like original DROO),
-        # one would generate K candidates and store the best one.
-        # e. [修改] 存储最好的 (state, action) 对
+        # f. 存储最好的 (state, action) 对
         if best_action is not None:
             # 我们找到了一个有效的最佳动作
             agent.store_experience(dnn_state, best_action)
             objective_history.append(best_objective)  # 记录最好的成本
             actions_history.append(best_action)
         else:
-            # 如果求解器全部失败 (罕见), 存入第一个作为惩罚
+            # 如果求解器全部失败 (罕见)
             print(f"Frame {t}: All {K_CANDIDATES} candidates failed to solve. Skipping experience store.")
-            #agent.store_experience(dnn_state, candidate_actions[0])
             objective_history.append(results_list[0][0].get('objective', np.inf))  # 记录失败
             actions_history.append(candidate_actions[0])
 
-        # f. Periodically, the agent learns from its memory
+        # g. Periodically, the agent learns from its memory
         if (t + 1) % TRAINING_INTERVAL == 0:
             agent.learn()
 
@@ -105,8 +97,7 @@ if __name__ == "__main__":
     print(f"Total duration: {total_duration:.2f} seconds")
     print(f"Average time per frame: {total_duration / NUM_TIME_FRAMES:.4f} seconds")
 
-    # Calculate and print the average objective of the last 20% of the simulation
-    # This gives an idea of the converged performance
+    # Calculate and print the average objective
     converged_performance = np.mean(objective_history[-int(NUM_TIME_FRAMES * 0.2):])
     print(f"Average objective value (last 20%): {converged_performance:.4f}")
 
