@@ -148,7 +148,7 @@ class ResourceAllocator:
             # --- 5. 求解问题 ---
             problem = cp.Problem(objective, constraints)
             # 使用 ECOS 或 SCS，它们是为这类问题设计的
-            problem.solve(solver=cp.ECOS, verbose=False) 
+            problem.solve(solver=cp.ECOS, verbose=True) 
 
             opt_duration = time.time() - start_opt_time
 
@@ -225,3 +225,4 @@ if __name__ == '__main__':
         print(f"  T_execute: {results['T_execute']:.6f}")
     else:
         print(f"Optimization Failed: {results['message']}")
+
