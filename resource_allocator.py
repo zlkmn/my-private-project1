@@ -1,13 +1,8 @@
-# DROO_D2D_PARTIAL_OFFLOADING/resource_allocator.py
-#
-# [全新实现]
-# 使用 CVXPY 解决 README.md 中定义的凸资源分配子问题。
-#
-
 import numpy as np
 import cvxpy as cp
 import time
-from config import * # Import all parameters from config.py
+from config import *  # Import all parameters from config.py
+
 
 class ResourceAllocator:
     """
@@ -127,7 +122,7 @@ class ResourceAllocator:
                         # 约束自传输为 0
                         constraints += [tau[i, j] == 0, e[i, j] == 0]
                         continue
-                    
+
                     if s_ij[i, j] < EPS:
                         # 如果没有数据要发送，则不分配时间和能量
                         constraints += [tau[i, j] == 0, e[i, j] == 0]
@@ -136,7 +131,7 @@ class ResourceAllocator:
                     if gamma_ij[i, j] < EPS:
                         # 如果信道增益为0但仍有数据要发送，则问题不可行
                         # 将 tau 设置为非常大，以使其成为一个糟糕的选择
-                        constraints += [tau[i, j] >= 1e9] 
+                        constraints += [tau[i, j] >= 1e9]
                         continue
 
                     # LHS = s_ij * log(2) * v_u / B
@@ -148,14 +143,15 @@ class ResourceAllocator:
             # --- 5. 求解问题 ---
             problem = cp.Problem(objective, constraints)
             # 使用 ECOS 或 SCS，它们是为这类问题设计的
-            problem.solve(solver=cp.ECOS, verbose=True) 
+            problem.solve(solver=cp.SCS, eps=1e-5, max_iters=20000, warm_start=True, verbose=True)
 
             opt_duration = time.time() - start_opt_time
 
             if problem.status in ["optimal", "optimal_inaccurate"]:
                 obj_val = problem.value
                 t_total_val = (a.value + np.sum(tau.value) + T_ex.value)
-                e_total_val = (np.sum(e.value) + np.sum(CYCLES_PER_BIT * ENERGY_EFFICIENCY_COEFF * L_j * (f.value**2)))
+                e_total_val = (
+                            np.sum(e.value) + np.sum(CYCLES_PER_BIT * ENERGY_EFFICIENCY_COEFF * L_j * (f.value ** 2)))
 
                 metrics = {
                     "success": True,
@@ -178,7 +174,7 @@ class ResourceAllocator:
                     "objective": np.inf,
                     "opt_duration_s": opt_duration
                 }
-        
+
         except Exception as e:
             # CVXPY 求解器可能因为数值问题彻底失败
             print(f"Warning: CVXPY solver failed with exception: {e}")
@@ -191,6 +187,7 @@ class ResourceAllocator:
 
         return metrics
 
+
 # Example usage (within the file for direct testing)
 if __name__ == '__main__':
     # 使用来自 Resource_allocator_test.py 的相同测试用例
@@ -198,7 +195,7 @@ if __name__ == '__main__':
                             [6.62546102e-06, 0.00000000e+00, 4.80614196e-06, 1.01083395e-06],
                             [2.31014624e-06, 4.80614196e-06, 0.00000000e+00, 3.81168776e-06],
                             [1.83911263e-06, 1.01083395e-06, 3.81168776e-06, 0.00000000e+00]])
-    tasks = np.array([461705.08926378, 970766.77384453, 123409.47028163])
+    tasks = np.array([46170.08926378, 97076.77384453, 12340.47028163])
     dummy_action = np.array([[0.17732602, 0.11025, 0.28628772, 0.42613626],
                              [0.358793, 0.21895458, 0.21797714, 0.20427531],
                              [0.10907146, 0.13038586, 0.6538224, 0.10672026]])
@@ -225,4 +222,5 @@ if __name__ == '__main__':
         print(f"  T_execute: {results['T_execute']:.6f}")
     else:
         print(f"Optimization Failed: {results['message']}")
+
 
